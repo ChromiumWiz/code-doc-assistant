@@ -11,6 +11,11 @@ from app.models import Chunk, Repo
 from app.prompts import SYSTEM_PROMPT, user_prompt
 
 logger = logging.getLogger(__name__)
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setLevel(logging.INFO)
+    logger.addHandler(_handler)
+logger.setLevel(logging.INFO)
 
 
 def _embed_query(client: OpenAI, text: str) -> list[float]:
@@ -28,6 +33,30 @@ def retrieve_chunks(session: Session, repo_id, query_embedding, top_k: int = 10)
     return session.execute(stmt).scalars().all()
 
 
+def _parse_answer_payload(raw_answer: str) -> dict | None:
+    try:
+        parsed = json.loads(raw_answer)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _map_citations_to_sources(
+    citations_used: list[int],
+    sources: list[dict[str, int | str]],
+) -> list[dict[str, int | str]]:
+    seen = set()
+    cited_sources = []
+    for item in citations_used:
+        if not isinstance(item, int):
+            continue
+        idx = item - 1
+        if 0 <= idx < len(sources) and idx not in seen:
+            cited_sources.append(sources[idx])
+            seen.add(idx)
+    return cited_sources
+
+
 def _extract_answer_and_sources(
     raw_answer: str,
     sources: list[dict[str, int | str]],
@@ -36,34 +65,23 @@ def _extract_answer_and_sources(
     repo_id: str | None = None,
     provided_sources: list[str] | None = None,
 ):
+    parsed = _parse_answer_payload(raw_answer)
     answer = raw_answer
     cited_sources: list[dict[str, int | str]] = []
-    try:
-        parsed = json.loads(raw_answer)
-        if isinstance(parsed, dict):
-            if isinstance(parsed.get("answer"), str):
-                answer = parsed["answer"]
-            citations_used = parsed.get("citations_used", [])
-            if isinstance(citations_used, list):
-                seen = set()
-                for item in citations_used:
-                    if not isinstance(item, int):
-                        continue
-                    idx = item - 1
-                    if 0 <= idx < len(sources) and idx not in seen:
-                        cited_sources.append(sources[idx])
-                        seen.add(idx)
-    except json.JSONDecodeError:
-        cited_sources = []
+    citations_used = []
+
+    if parsed:
+        if isinstance(parsed.get("answer"), str):
+            answer = parsed["answer"]
+        if isinstance(parsed.get("citations_used"), list):
+            citations_used = parsed["citations_used"]
+
+    if citations_used:
+        cited_sources = _map_citations_to_sources(citations_used, sources)
 
     if rag_debug and rag_trace_id and repo_id and provided_sources is not None:
         used_deduped = []
-        try:
-            parsed = json.loads(raw_answer)
-            citations_used = []
-            if isinstance(parsed, dict) and isinstance(parsed.get("citations_used"), list):
-                citations_used = parsed["citations_used"]
-
+        if citations_used:
             seen = set()
             for item in citations_used:
                 if not isinstance(item, int):
@@ -72,8 +90,6 @@ def _extract_answer_and_sources(
                 if 0 <= idx < len(provided_sources) and idx not in seen:
                     used_deduped.append(provided_sources[idx])
                     seen.add(idx)
-        except json.JSONDecodeError:
-            used_deduped = []
 
         logger.info(
             json.dumps(
@@ -154,11 +170,6 @@ def answer_question(session: Session, repo: Repo, question: str):
     rag_trace_id = None
     provided_sources = None
     if settings.rag_debug:
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            handler.setLevel(logging.INFO)
-            logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
         rag_trace_id = uuid.uuid4().hex
         provided_sources = _format_sources(sources)
         logger.info(
