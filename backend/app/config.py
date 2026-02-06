@@ -12,6 +12,8 @@ class Settings:
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         self.chat_model = os.getenv("CHAT_MODEL", "gpt-4o-mini")
+        self.chat_temperature = float(os.getenv("CHAT_TEMPERATURE", "0.2"))
+        self.rag_debug = os.getenv("RAG_DEBUG", "false").strip() == "True"
         self.embedding_dim = self._resolve_embedding_dim()
 
         if not self.database_url:

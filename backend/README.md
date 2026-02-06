@@ -3,7 +3,7 @@
 ## Setup
 Create a `.env` file (repo root or `backend/`) using `.env.example` as a template.
 
-If you use a different embedding model, set `EMBEDDING_DIM`.
+If you use a different embedding model, set `EMBEDDING_DIM`. You can also adjust `CHAT_TEMPERATURE`.
 
 ## Run locally
 Install dependencies and run migrations:
