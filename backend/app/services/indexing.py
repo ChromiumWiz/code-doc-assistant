@@ -9,10 +9,60 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Chunk, Repo
+from app.services.chunker import chunk_code
 from app.services.github import shallow_clone, validate_github_url
 
 
-INCLUDE_EXTS = {".py", ".ts", ".js", ".java", ".md", ".json", ".yml", ".yaml"}
+INCLUDE_EXTS = {
+    ".py",
+    ".ts",
+    ".js",
+    ".java",
+    ".c",
+    ".h",
+    ".cpp",
+    ".hpp",
+    ".cs",
+    ".rb",
+    ".php",
+    ".go",
+    ".scala",
+    ".clj",
+    ".groovy",
+    ".lua",
+    ".r",
+    ".pl",
+    ".sh",
+    ".bat",
+    ".cmd",
+    ".sql",
+    ".md",
+    ".json",
+    ".yml",
+    ".yaml",
+    ".txt",
+    ".rst",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".properties",
+    ".gradle",
+    ".xml",
+    ".xsd",
+    ".xsl",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".graphql",
+    ".gql",
+    ".dockerfile",
+    ".mk",
+    ".csv",
+}
 EXCLUDE_DIRS = {"node_modules", "dist", "build", ".git", "__pycache__", ".next"}
 MAX_FILE_BYTES = 1_000_000
 
@@ -50,7 +100,10 @@ def _line_range(text: str, start: int, end: int) -> tuple[int, int]:
 
 def _language_from_path(path: str) -> str:
     _, ext = os.path.splitext(path)
-    return ext.lstrip(".").lower() or "text"
+    ext = ext.lstrip(".").lower()
+    if ext == "py":
+        return "python"
+    return ext or "text"
 
 
 def _embed_texts(client: OpenAI, texts: list[str]) -> list[list[float]]:
@@ -91,19 +144,14 @@ def index_repo(session: Session, repo: Repo, github_url: str | None):
             except OSError:
                 continue
 
-            file_chunks = []
             language = _language_from_path(rel_path)
-            for start, end, chunk_text in _chunk_text(content):
-                start_line, end_line = _line_range(content, start, end)
-                file_chunks.append(
-                    {
-                        "path": rel_path.replace("\\", "/"),
-                        "language": language,
-                        "start_line": start_line,
-                        "end_line": end_line,
-                        "content": chunk_text,
-                    }
-                )
+            file_chunks = chunk_code(
+                content,
+                rel_path.replace("\\", "/"),
+                language,
+                chunk_size=1000,
+                overlap=200,
+            )
 
             if not file_chunks:
                 continue
@@ -113,7 +161,7 @@ def index_repo(session: Session, repo: Repo, github_url: str | None):
                 session.add(
                     Chunk(
                         repo_id=repo.id,
-                        path=chunk_data["path"],
+                        path=chunk_data["file_path"],
                         language=chunk_data["language"],
                         start_line=chunk_data["start_line"],
                         end_line=chunk_data["end_line"],
