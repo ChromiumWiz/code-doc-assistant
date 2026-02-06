@@ -27,6 +27,14 @@ export async function createRepo(name: string | null, github_url: string): Promi
   return handleResponse<RepoInfo>(res);
 }
 
+export async function listRepos(): Promise<RepoInfo[]> {
+  const base = requireBaseUrl();
+  const res = await fetch(`${base}/repos`, {
+    method: "GET"
+  });
+  return handleResponse<RepoInfo[]>(res);
+}
+
 export async function indexRepo(repoId: string): Promise<IndexResult> {
   const base = requireBaseUrl();
   const res = await fetch(`${base}/repos/${encodeURIComponent(repoId)}/index`, {

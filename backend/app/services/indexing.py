@@ -77,6 +77,8 @@ def index_repo(session: Session, repo: Repo, github_url: str | None):
     client = OpenAI(api_key=settings.openai_api_key)
 
     try:
+        repo.status = "processing"
+        session.commit()
         repo_path = shallow_clone(repo.github_url)
         session.execute(delete(Chunk).where(Chunk.repo_id == repo.id))
         session.commit()
@@ -124,6 +126,8 @@ def index_repo(session: Session, repo: Repo, github_url: str | None):
             session.commit()
             files_indexed += 1
 
+        repo.status = "done"
+        session.commit()
     finally:
         if repo_path:
             shutil.rmtree(repo_path, ignore_errors=True)

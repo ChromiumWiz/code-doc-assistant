@@ -2,6 +2,7 @@ export type RepoInfo = {
   repo_id: string;
   name?: string | null;
   github_url: string;
+  status: "not_indexed" | "processing" | "done" | string;
 };
 
 export type IndexResult = {

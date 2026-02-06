@@ -17,6 +17,7 @@ class Repo(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=True)
     github_url = Column(String, nullable=True)
+    status = Column(String, nullable=False, server_default="not_indexed")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     chunks = relationship("Chunk", back_populates="repo", cascade="all, delete")

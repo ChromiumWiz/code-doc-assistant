@@ -4,8 +4,7 @@ import { Space_Grotesk } from "next/font/google";
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
 export const metadata = {
-  title: "Code Documentation Assistant",
-  description: "Minimal UI for the Code Documentation Assistant backend"
+  title: "Code Documentation Assistant"
 };
 
 export default function RootLayout({

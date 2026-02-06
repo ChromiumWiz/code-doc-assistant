@@ -13,5 +13,4 @@ npm run dev
 
 ## Pages
 - `/` Create Repo
-- `/index` Index Repo
 - `/chat` Chat

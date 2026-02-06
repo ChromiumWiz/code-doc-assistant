@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createRepo } from "../lib/api";
-import { getRepo, saveRepo } from "../lib/storage";
+import { createRepo, indexRepo, listRepos } from "../lib/api";
+import { getRepos, saveRepo, saveRepos } from "../lib/storage";
 import { isValidGithubRepoUrl } from "../lib/validate";
 import { RepoInfo } from "../lib/types";
 
@@ -12,10 +12,21 @@ export default function RepoForm() {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [repo, setRepo] = useState<RepoInfo | null>(null);
+  const [repos, setRepos] = useState<RepoInfo[]>([]);
+  const [indexing, setIndexing] = useState(false);
 
   useEffect(() => {
-    setRepo(getRepo());
+    const local = getRepos();
+    setRepos(local);
+    listRepos()
+      .then((remote) => {
+        const next = remote || [];
+        saveRepos(next);
+        setRepos(next);
+      })
+      .catch(() => {
+        // fall back to local storage if backend is unavailable
+      });
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -33,10 +44,11 @@ export default function RepoForm() {
       const saved = {
         repo_id: created.repo_id,
         github_url: created.github_url || url.trim(),
-        name: created.name ?? (name.trim() || null)
+        name: created.name ?? (name.trim() || null),
+        status: created.status || "not_indexed"
       } as RepoInfo;
       saveRepo(saved);
-      setRepo(saved);
+      setRepos(getRepos());
       setName(saved.name || "");
       setUrl(saved.github_url);
     } catch (err) {
@@ -44,6 +56,30 @@ export default function RepoForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function onIndex(target: RepoInfo) {
+    if (target.status === "done" || target.status === "processing") return;
+    setError(null);
+    setIndexing(true);
+    const next = { ...target, status: "processing" as const };
+    updateRepo(next);
+    try {
+      await indexRepo(target.repo_id);
+      const done = { ...target, status: "done" as const };
+      updateRepo(done);
+    } catch (err) {
+      const failed = { ...target, status: "not_indexed" as const };
+      updateRepo(failed);
+      setError(err instanceof Error ? err.message : "Indexing failed");
+    } finally {
+      setIndexing(false);
+    }
+  }
+
+  function updateRepo(next: RepoInfo) {
+    saveRepo(next);
+    setRepos(getRepos());
   }
 
   return (
@@ -77,17 +113,42 @@ export default function RepoForm() {
 
       <div className="divider" />
 
-      {repo ? (
+      {repos.length > 0 ? (
         <div className="stack">
-          <div className="badge">Selected repo</div>
-          <div>
-            <strong>{repo.name || "(no name)"}</strong>
-          </div>
-          <div className="notice">{repo.github_url}</div>
-          <div className="row">
-            <Link href="/index">Go to indexing</Link>
-            <Link href="/chat">Go to chat</Link>
-          </div>
+          {repos.map((item) => (
+            <div key={item.repo_id} className="repo-card stack">
+
+              <div>
+                <strong>{item.name || "(no name)"}</strong>
+              </div>
+              <div className="notice">{item.github_url}</div>
+              <div className="row">
+                <button
+                  type="button"
+                  onClick={() => onIndex(item)}
+                  disabled={
+                    indexing || item.status === "processing" || item.status === "done"
+                  }
+                >
+                  {item.status === "processing"
+                    ? "Processing..."
+                    : item.status === "done"
+                    ? "Indexed"
+                    : indexing
+                    ? "Indexing..."
+                    : "Index Now"}
+                </button>
+                {item.status === "done" ? (
+                  <Link
+                    href={`/chat?repo_id=${encodeURIComponent(item.repo_id)}`}
+                    className="button-link"
+                  >
+                    Go to chat
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="notice">No repo selected yet.</div>

@@ -32,6 +32,7 @@ class RepoResponse(BaseModel):
     repo_id: uuid.UUID
     name: str | None
     github_url: str | None
+    status: str
 
 
 class IndexRequest(BaseModel):
@@ -40,6 +41,21 @@ class IndexRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
+
+
+@app.get("/repos", response_model=list[RepoResponse])
+def list_repos():
+    with SessionLocal() as session:
+        repos = session.query(Repo).order_by(Repo.created_at.desc()).all()
+        return [
+            RepoResponse(
+                repo_id=repo.id,
+                name=repo.name,
+                github_url=repo.github_url,
+                status=repo.status,
+            )
+            for repo in repos
+        ]
 
 
 @app.post("/repos", response_model=RepoResponse)
@@ -56,7 +72,12 @@ def create_repo(payload: RepoCreate):
         session.commit()
         session.refresh(repo)
 
-        return RepoResponse(repo_id=repo.id, name=repo.name, github_url=repo.github_url)
+        return RepoResponse(
+            repo_id=repo.id,
+            name=repo.name,
+            github_url=repo.github_url,
+            status=repo.status,
+        )
 
 
 @app.post("/repos/{repo_id}/index")

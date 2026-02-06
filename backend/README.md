@@ -1,28 +1,22 @@
 # Code Documentation Assistant Backend
 
 ## Setup
-Create a `.env` file (repo root or `backend/`) with:
-
-```
-DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/code_docs
-OPENAI_API_KEY=your_key
-EMBEDDING_MODEL=text-embedding-3-small
-CHAT_MODEL=gpt-4o-mini
-```
+Create a `.env` file (repo root or `backend/`) using `.env.example` as a template.
 
 If you use a different embedding model, set `EMBEDDING_DIM`.
 
-## Run with Docker
-From the repo root:
+## Run locally
+Install dependencies and run migrations:
 
 ```
-docker-compose up --build
+pip install -r requirements.txt
+alembic upgrade head
 ```
 
-Then run migrations:
+Start the API:
 
 ```
-docker-compose exec backend alembic upgrade head
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 API is available at `http://localhost:8000`.
