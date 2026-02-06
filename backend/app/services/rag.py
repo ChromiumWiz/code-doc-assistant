@@ -94,6 +94,35 @@ def _format_sources(sources: list[dict[str, int | str]]) -> list[str]:
     return [f"{s['path']}:{s['start_line']}-{s['end_line']}" for s in sources]
 
 
+def _is_prompt_injection(text: str) -> bool:
+    lowered = text.lower()
+    phrases = [
+        "ignore previous",
+        "ignore earlier",
+        "disregard above",
+        "forget instructions",
+        "system prompt",
+        "reveal system",
+        "show system prompt",
+        "developer message",
+        "jailbreak",
+        "do anything now",
+        "dan",
+    ]
+    return any(phrase in lowered for phrase in phrases)
+
+
+def _log_prompt_injection(repo_id: str):
+    if settings.rag_debug or logger.isEnabledFor(logging.WARNING):
+        logger.warning(
+            "prompt_injection_detected",
+            extra={
+                "repo_id": repo_id,
+                "reason": "matched_known_phrase",
+            },
+        )
+
+
 def answer_question(session: Session, repo: Repo, question: str):
     if not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is required")
@@ -113,6 +142,14 @@ def answer_question(session: Session, repo: Repo, question: str):
 
     context = "\n\n".join(context_lines)
     prompt = user_prompt(context=context, question=question)
+
+    if _is_prompt_injection(context) or _is_prompt_injection(question):
+        _log_prompt_injection(str(repo.id))
+        safe_answer = (
+            "I can't help with that. Please ask a question about the repository's code or "
+            "documentation."
+        )
+        return safe_answer, []
 
     rag_trace_id = None
     provided_sources = None
